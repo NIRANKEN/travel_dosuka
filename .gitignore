@@ -77,4 +77,4 @@ ios/Runner/GoogleService-Info.plist
 .DS_Store
 Thumbs.db
 
-firebase.json
+/firebase.json
