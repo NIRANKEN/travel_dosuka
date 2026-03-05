@@ -1,53 +1,36 @@
-import { getDatabase } from "../config/database.js";
-import { TABLE_NAMES } from "../config/constants.js";
+import { FirestoreVectorStore } from "./firestoreVectorStore.js";
+import { getUserVectorsCollection } from "../config/constants.js";
 
 export class VectorStoreService {
   /**
-   * ベクトルストアを初期化（既存テーブルをクリア）
+   * ユーザーのベクトルストアを初期化（既存ドキュメントをクリア）
    */
-  async initializeVectorStore(): Promise<{ message: string; tables: string[]; nextStep: string }> {
-    const db = getDatabase();
+  async initializeVectorStore(uid: string): Promise<{ message: string; nextStep: string }> {
+    const collectionPath = getUserVectorsCollection(uid);
+    const store = FirestoreVectorStore.fromExistingCollection(
+      // embeddings は不要（検索しないため null を渡す）
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      null as any,
+      collectionPath
+    );
 
-    // 既存のテーブルを削除（クリーンな状態から開始）
-    try {
-      const existingTables = await db.tableNames();
-      if (existingTables.includes(TABLE_NAMES.TRAVEL_REPORTS)) {
-        await db.dropTable(TABLE_NAMES.TRAVEL_REPORTS);
-        console.log("既存の travel_reports テーブルを削除しました");
-      }
-    } catch {
-      console.log(
-        "テーブル削除をスキップ（テーブルが存在しない可能性があります）"
-      );
-    }
-
-    console.log("ベクトルストア用ディレクトリを準備しました");
-
-    // テーブルの実際の作成は /input-test で最初のドキュメント追加時に行われる
-    const tableNames = await db.tableNames();
-    console.log("利用可能なテーブル:", tableNames);
+    await store.deleteAll();
+    console.log(`ユーザー ${uid} のベクトルストアをクリアしました`);
 
     return {
-      message:
-        "ベクトルストアが初期化されました。最初のドキュメント追加時にテーブルが作成されます。",
-      tables: tableNames,
-      nextStep: "POST /api/v1/documents を呼び出してPDFデータを追加してください",
+      message: "ベクトルストアが初期化されました",
+      nextStep: "POST /api/v1/documents または /api/v1/youtube-videos でデータを追加してください",
     };
   }
 
   /**
-   * 利用可能なテーブル一覧を取得
+   * ユーザーのコレクションにドキュメントが存在するか確認
    */
-  async getAvailableTables(): Promise<string[]> {
-    const db = getDatabase();
-    return await db.tableNames();
-  }
-
-  /**
-   * 指定されたテーブルが存在するかチェック
-   */
-  async tableExists(tableName: string): Promise<boolean> {
-    const tables = await this.getAvailableTables();
-    return tables.includes(tableName);
+  async collectionHasData(uid: string): Promise<boolean> {
+    const collectionPath = getUserVectorsCollection(uid);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const store = FirestoreVectorStore.fromExistingCollection(null as any, collectionPath);
+    const count = await store.count();
+    return count > 0;
   }
 }

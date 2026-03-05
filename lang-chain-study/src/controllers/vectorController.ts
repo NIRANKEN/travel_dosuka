@@ -13,11 +13,12 @@ export class VectorController {
   }
 
   /**
-   * ベクトルストアを初期化
+   * ユーザーのベクトルストアを初期化
    */
   async initializeVectorStore(req: Request, res: Response): Promise<void> {
+    const uid = req.uid!;
     try {
-      const result = await this.vectorStoreService.initializeVectorStore();
+      const result = await this.vectorStoreService.initializeVectorStore(uid);
       res.json(result);
     } catch (error) {
       console.error("Error in initialize-vector-store endpoint:", error);
@@ -29,12 +30,12 @@ export class VectorController {
   }
 
   /**
-   * 汎用的なドキュメント追加エンドポイント（本番用：統一テーブル使用）
+   * PDFドキュメント追加エンドポイント
    */
   async addDocuments(req: Request, res: Response): Promise<void> {
+    const uid = req.uid!;
     try {
-      // 本番用は統一テーブル名を使用してPDF処理
-      const result = await this.documentService.processPdfDocument();
+      const result = await this.documentService.processPdfDocument(uid);
       res.json({
         success: true,
         message: "ドキュメントが正常にベクトルストアに追加されました",
@@ -50,9 +51,10 @@ export class VectorController {
   }
 
   /**
-   * 汎用的なYouTube動画追加エンドポイント（本番用：統一テーブル使用）
+   * YouTube動画追加エンドポイント
    */
   async addYoutubeVideos(req: Request, res: Response): Promise<void> {
+    const uid = req.uid!;
     try {
       const { videoUrls } = req.body as YoutubeInputRequest;
 
@@ -77,8 +79,7 @@ export class VectorController {
         return;
       }
 
-      // 本番用は統一テーブル名を使用してYouTube処理
-      const result = await this.documentService.processYoutubeVideo(videoUrls);
+      const result = await this.documentService.processYoutubeVideo(uid, videoUrls);
       res.json({
         success: true,
         message: "YouTube動画が正常にベクトルストアに追加されました",
@@ -98,19 +99,16 @@ export class VectorController {
    * YouTubeプレイリスト追加エンドポイント
    */
   async addYoutubePlaylist(req: Request, res: Response): Promise<void> {
+    const uid = req.uid!;
     try {
       const { playlistUrl } = req.body as YoutubePlaylistRequest;
 
       if (!playlistUrl || typeof playlistUrl !== "string") {
-        res.status(400).json({
-          error: "playlistUrlは必須です",
-        } as ErrorResponse);
+        res.status(400).json({ error: "playlistUrlは必須です" } as ErrorResponse);
         return;
       }
 
-      const result = await this.documentService.processYoutubePlaylist(
-        playlistUrl
-      );
+      const result = await this.documentService.processYoutubePlaylist(uid, playlistUrl);
       res.json({
         success: true,
         message: "YouTubeプレイリストが正常に処理されました",

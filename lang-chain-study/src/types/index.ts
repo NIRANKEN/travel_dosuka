@@ -1,6 +1,16 @@
+// Express Request に uid を追加
+declare global {
+  // eslint-disable-next-line @typescript-eslint/no-namespace
+  namespace Express {
+    interface Request {
+      uid?: string;
+    }
+  }
+}
+
 // Output test options interface
 export interface OutputTestOptions {
-  tableName: string;
+  collectionPath: string;
   systemMessage: string;
   dataSourceName: string;
   logPrefix: string;
@@ -63,7 +73,7 @@ export interface YoutubePlaylistRequest {
 export interface DocumentProcessResult {
   message: string;
   totalChunks: number;
-  totalRowsInTable?: number;
+  totalDocsInCollection?: number;
 }
 
 // YouTube search request
@@ -73,7 +83,7 @@ export type Duration = "short" | "long";
 export interface YoutubeSearchOptions {
   sort_by?: SortBy;
   duration?: Duration;
-  yearsBack?: number; // 何年前までの動画を対象にするか（デフォルト: 3年）
+  yearsBack?: number;
 }
 
 export interface YoutubeSearchRequest {

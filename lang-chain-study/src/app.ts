@@ -1,4 +1,5 @@
 import express, { Application } from "express";
+import cors from "cors";
 import dotenv from "dotenv";
 import { initializeRoutes } from "./routes/index.js";
 import { initializeDatabase } from "./config/database.js";
@@ -9,13 +10,22 @@ dotenv.config();
 export async function createApp(): Promise<Application> {
   const app: Application = express();
 
-  // Middleware
+  // CORS（Flutter Web 含む全プラットフォーム対応）
+  app.use(
+    cors({
+      origin: true, // 本番環境では特定ドメインに絞ること
+      allowedHeaders: ["Authorization", "Content-Type"],
+      methods: ["GET", "POST", "OPTIONS"],
+    })
+  );
+
+  // JSON ボディパーサー
   app.use(express.json());
 
-  // Initialize database
-  await initializeDatabase();
+  // Firebase Admin SDK を初期化
+  initializeDatabase();
 
-  // Initialize routes
+  // ルート設定（/api 配下は authMiddleware が適用される）
   const routes = await initializeRoutes();
   app.use("/", routes);
 
@@ -29,24 +39,20 @@ export function startServer(app: Application): void {
     console.log(`\n🚀 サーバーが起動しました: http://localhost:${port}`);
     console.log(`📝 環境: ${process.env.NODE_ENV || "development"}`);
     console.log(`🔑 Google API Key設定済み: ${!!process.env.GOOGLE_API_KEY}`);
-    console.log(
-      `🔄 ホットリロード有効 - ファイルを保存すると自動的に再起動します\n`
-    );
+    console.log(`🔥 Firebase Project: ${process.env.FIREBASE_PROJECT_ID || "GCLOUD_PROJECT"}\n`);
 
-    // Log available endpoints
     console.log("📋 利用可能なエンドポイント:");
     console.log("  GET  / - API ヘルプ");
-    console.log("  GET  /health - ヘルスチェック");
-    console.log("  POST /chat - 基本的なチャット");
-    console.log("  POST /initialize-vector-store - ベクトルストア初期化");
-    console.log("  POST /input-test - PDFデータ追加");
-    console.log("  POST /input-youtube-test - YouTube動画データ追加");
-    console.log("  POST /output-test - RAG検索・回答（PDF）");
-    console.log("  POST /output-youtube-test - RAG検索・回答（YouTube）");
-    console.log(`  🌐 Lance Data Viewer: http://localhost:8090\n`);
+    console.log("  GET  /health - ヘルスチェック（認証不要）");
+    console.log("  POST /chat - 基本的なチャット（認証不要）");
+    console.log("  POST /api/v1/vector-store/init - ベクトルストア初期化 [要認証]");
+    console.log("  POST /api/v1/documents - PDFデータ追加 [要認証]");
+    console.log("  POST /api/v1/youtube-videos - YouTube動画データ追加 [要認証]");
+    console.log("  POST /api/v1/youtube-playlist - YouTubeプレイリスト追加 [要認証]");
+    console.log("  POST /api/v1/search - RAG検索・回答 [要認証]");
+    console.log("  POST /api/v1/youtube/search - YouTube検索 [要認証]\n");
   });
 
-  // Graceful shutdown
   const gracefulShutdown = (signal: string) => {
     console.log(`\n${signal} signal received: closing HTTP server gracefully`);
     server.close((err) => {
@@ -59,12 +65,10 @@ export function startServer(app: Application): void {
     });
   };
 
-  // Handle different termination signals
   process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
   process.on("SIGINT", () => gracefulShutdown("SIGINT"));
-  process.on("SIGUSR2", () => gracefulShutdown("SIGUSR2")); // nodemon restart signal
+  process.on("SIGUSR2", () => gracefulShutdown("SIGUSR2"));
 
-  // Handle uncaught exceptions and rejections for development
   process.on("uncaughtException", (error) => {
     console.error("Uncaught Exception:", error);
     gracefulShutdown("UNCAUGHT_EXCEPTION");

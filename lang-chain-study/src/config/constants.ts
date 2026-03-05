@@ -1,15 +1,8 @@
-// Database configuration
-export const DB_PATH = "./data/sample-lancedb";
+// Firestore コレクションパス（ユーザーごと）
+export const getUserVectorsCollection = (uid: string): string =>
+  `users/${uid}/vectors`;
 
-// Table names
-export const TABLE_NAMES = {
-  TRAVEL_REPORTS: "travel_reports",
-  YOUTUBE_VIDEOS: "youtube_videos",
-  // 本番用統一テーブル
-  DOCUMENTS: "documents",
-} as const;
-
-// PDF file path
+// PDF file path（テスト用）
 export const PDF_FILE_PATH =
   "example_data/250703_jtb_summer_vacation_report.pdf";
 
@@ -24,7 +17,6 @@ export const TEXT_SPLITTER_CONFIG = {
 
 // Retrieval configuration
 export const RETRIEVAL_CONFIG = {
-  // resultCount: 2,
   resultCount: 10,
 } as const;
 
@@ -56,6 +48,5 @@ export const SYSTEM_MESSAGES = {
 export const FALLBACK_SOURCES = {
   PDF: "PDFファイルから取得",
   YOUTUBE: "YouTube動画から取得",
-  // 本番用統一ソース
   DOCUMENTS: "ドキュメントから取得",
 } as const;
