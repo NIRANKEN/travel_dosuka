@@ -1,30 +1,15 @@
-import * as lancedb from "@lancedb/lancedb";
-import { mkdir } from "fs/promises";
-import { DB_PATH } from "./constants.js";
+import { initializeApp, getApps } from "firebase-admin/app";
+import { getFirestore } from "firebase-admin/firestore";
 
-let db: lancedb.Connection | null = null;
-
-export async function initializeDatabase(): Promise<lancedb.Connection> {
-  if (db) {
-    return db;
+export function initializeDatabase(): void {
+  if (getApps().length === 0) {
+    // Cloud Run 上では Application Default Credentials が自動的に使用される
+    // ローカル開発時は GOOGLE_APPLICATION_CREDENTIALS 環境変数でサービスアカウントを指定
+    initializeApp();
+    console.log("Firebase Admin SDK を初期化しました");
   }
-
-  try {
-    await mkdir(DB_PATH, { recursive: true });
-    console.log(`データディレクトリを作成/確認しました: ${DB_PATH}`);
-  } catch {
-    console.log(`ディレクトリは既に存在します: ${DB_PATH}`);
-  }
-
-  db = await lancedb.connect(DB_PATH);
-  console.log(`LanceDB に接続しました: ${DB_PATH}`);
-  
-  return db;
 }
 
-export function getDatabase(): lancedb.Connection {
-  if (!db) {
-    throw new Error("Database not initialized. Call initializeDatabase() first.");
-  }
-  return db;
+export function getFirestoreDb() {
+  return getFirestore();
 }
