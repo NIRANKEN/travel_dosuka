@@ -79,9 +79,12 @@ export class FirestoreVectorStore extends VectorStore {
     const col = db.collection(this.collectionPath);
 
     const snapshot = await col
-      .findNearest("embedding", FieldValue.vector(query), {
+      .findNearest({
+        vectorField: "embedding",
+        queryVector: FieldValue.vector(query),
         limit: k,
         distanceMeasure: "COSINE",
+        distanceResultField: "vector_distance",
       })
       .get();
 
@@ -92,7 +95,7 @@ export class FirestoreVectorStore extends VectorStore {
           pageContent: data.content,
           metadata: data.metadata ?? {},
         }),
-        0,
+        data.vector_distance ?? 0,
       ];
     });
   }
@@ -125,12 +128,12 @@ export class FirestoreVectorStore extends VectorStore {
   async deleteAll(): Promise<void> {
     const db = getFirestore();
     const col = db.collection(this.collectionPath);
-    const batchSize = 499;
 
-    const snapshot = await col.get();
-    for (let i = 0; i < snapshot.docs.length; i += batchSize) {
+    while (true) {
+      const snapshot = await col.limit(499).get();
+      if (snapshot.empty) break;
       const batch = db.batch();
-      snapshot.docs.slice(i, i + batchSize).forEach((doc) => batch.delete(doc.ref));
+      snapshot.docs.forEach((doc) => batch.delete(doc.ref));
       await batch.commit();
     }
   }

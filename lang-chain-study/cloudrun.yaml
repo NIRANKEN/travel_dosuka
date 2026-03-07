@@ -28,6 +28,8 @@ spec:
           value: '8080'
         - name: FIREBASE_PROJECT_ID
           value: YOUR_FIREBASE_PROJECT_ID
+        - name: CORS_ORIGIN
+          value: https://YOUR_PROJECT_ID.web.app
         # GOOGLE_API_KEY は Secret Manager で管理する（平文で設定しないこと）
         - name: GOOGLE_API_KEY
           valueFrom:

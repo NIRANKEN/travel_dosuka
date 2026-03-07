@@ -11,9 +11,13 @@ export async function createApp(): Promise<Application> {
   const app: Application = express();
 
   // CORS（Flutter Web 含む全プラットフォーム対応）
+  const corsOrigin =
+    process.env.NODE_ENV === "production"
+      ? (process.env.CORS_ORIGIN?.split(",") ?? [])
+      : true;
   app.use(
     cors({
-      origin: true, // 本番環境では特定ドメインに絞ること
+      origin: corsOrigin,
       allowedHeaders: ["Authorization", "Content-Type"],
       methods: ["GET", "POST", "OPTIONS"],
     })
