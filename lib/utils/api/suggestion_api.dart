@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../../log.dart';
 
-/// lang-chain-studyバックエンドへの旅行提案API呼び出しユーティリティ
+/// travel-suggestion-apiバックエンドへの旅行提案API呼び出しユーティリティ
 class SuggestionApi {
   /// デフォルトのAPIベースURL。
   /// 環境変数や設定ファイルで上書きする想定。

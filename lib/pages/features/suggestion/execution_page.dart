@@ -10,7 +10,7 @@ import '../../../utils/api/suggestion_api.dart';
 import '../../../widgets/common/dosuka_scaffold.dart';
 
 /// 旅行提案実行ページ。
-/// lang-chain-studyのAPIに質問を投げて旅行提案を受け取る。
+/// travel-suggestion-apiのAPIに質問を投げて旅行提案を受け取る。
 class ExecutionPage extends StatefulWidget {
   const ExecutionPage({super.key});
 

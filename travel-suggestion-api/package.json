@@ -1,5 +1,5 @@
 {
-  "name": "lang-chain-study",
+  "name": "travel-suggestion-api",
   "version": "1.0.0",
   "description": "LangChain tutorial application with TypeScript and Google GenAI",
   "main": "dist/server.js",
