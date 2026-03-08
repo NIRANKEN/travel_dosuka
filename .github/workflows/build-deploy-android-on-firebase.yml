@@ -1,0 +1,95 @@
+name: Android CI for Build and Deploy on Firebase App Distribution
+
+# Firebase App Distribution にアップロードするための workflow
+on:
+  workflow_call:
+    secrets:
+      KEYSTOREFILE:
+        required: true
+      KEYSTOREPASSWORD:
+        required: true
+      KEYSTOREALIAS:
+        required: true
+      KEYSTOREALIASPASSWORD:
+        required: true
+      FIREBASE_APP_ID:
+        required: true
+      FIREBASE_SERVICE_CREDENTIALS_FILE_CONTENT:
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "corretto"
+          java-version: "17"
+
+      - name: install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.38.6"
+          channel: "stable"
+
+      - name: setup Build Keys
+        env:
+          KEYSTOREFILE: ${{ secrets.KEYSTOREFILE }}
+          KEYSTOREPASSWORD: ${{ secrets.KEYSTOREPASSWORD }}
+          KEYSTOREALIAS: ${{ secrets.KEYSTOREALIAS }}
+          KEYSTOREALIASPASSWORD: ${{ secrets.KEYSTOREALIASPASSWORD }}
+        run: |
+          touch ./android/keystore.properties
+          echo "${KEYSTOREFILE}" | base64 -d > travel-dosuka.keystore
+          echo -e "travelDosukaKeyFile=$PWD/travel-dosuka.keystore\n" >> ./android/keystore.properties
+          echo -e "travelDosukaKeyStorePassword=${KEYSTOREPASSWORD}\n" >> ./android/keystore.properties
+          echo -e "travelDosukaKeyAlias=${KEYSTOREALIAS}\n" >> ./android/keystore.properties
+          echo -e "travelDosukaKeyAliasPassword=${KEYSTOREALIASPASSWORD}\n" >> ./android/keystore.properties
+
+      - name: build Release apk
+        run: flutter build apk --no-tree-shake-icons
+
+      - name: add PATH aapt
+        run: |
+          echo $ANDROID_HOME
+          ls $ANDROID_HOME/build-tools/
+          ls $ANDROID_HOME/build-tools/34.0.0
+          echo "${ANDROID_HOME}/build-tools/34.0.0/" >> $GITHUB_PATH
+
+      - name: rename artifacts
+        run: |
+          VERSION_NAME=`aapt dump badging ./build/app/outputs/flutter-apk/app-release.apk|grep "versionName"|sed -e "s/.*versionName='//" -e "s/' .*//"`
+          VERSION_CODE=`aapt dump badging ./build/app/outputs/flutter-apk/app-release.apk|grep "versionCode"|sed -e "s/.*versionCode='//" -e "s/' .*//"`
+          mv build/app/outputs/flutter-apk/app-release.apk \
+            build/app/outputs/flutter-apk/$VERSION_NAME-$VERSION_CODE-release.apk
+
+      - name: Fix App File Name
+        run: |
+          FILE_NAME=$(find build/app/outputs/flutter-apk -name '*.apk' -print -quit)
+          echo "APK_FILE_FULL_PATH=$FILE_NAME" >> $GITHUB_ENV
+
+      - name: Create Release Note
+        run: |
+          DATE=$(date +'%Y年%m月%d日 %H:%M:%S')
+          echo "ビルド日" > releasenote.txt
+          echo $DATE >> releasenote.txt
+          echo -e "\n\n" >> releasenote.txt
+          COMMIT_INFO1=$(git log -1 --pretty=format:"commit hash : %h")
+          echo $COMMIT_INFO1 >> releasenote.txt
+          COMMIT_INFO2=$(git log -1 --pretty=format:"author : %an")
+          echo $COMMIT_INFO2 >> releasenote.txt
+          COMMIT_INFO3=$(git log -1 --pretty=format:"コミットメッセージ : %s")
+          echo $COMMIT_INFO3 >> releasenote.txt
+
+      - name: Upload artifact to Firebase App Distribution
+        uses: wzieba/Firebase-Distribution-Github-Action@v1
+        with:
+          appId: ${{ secrets.FIREBASE_APP_ID }}
+          serviceCredentialsFileContent: ${{ secrets.FIREBASE_SERVICE_CREDENTIALS_FILE_CONTENT }}
+          groups: tester
+          file: ${{ env.APK_FILE_FULL_PATH }}
+          releaseNotesFile: releasenote.txt

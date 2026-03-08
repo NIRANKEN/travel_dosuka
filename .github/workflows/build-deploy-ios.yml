@@ -1,0 +1,145 @@
+name: iOS CI for Build and Deploy
+
+# TestFlight または App Store にアップロードするための workflow
+on:
+  workflow_call:
+    inputs:
+      upload-to-testflight:
+        type: boolean
+        description: "Upload to TestFlight"
+        required: false
+        default: true
+    secrets:
+      APP_STORE_CONNECT_API_KEY_ID:
+        required: true
+      APP_STORE_CONNECT_ISSUER_ID:
+        required: true
+      APP_STORE_CONNECT_API_KEY_CONTENT:
+        required: true
+      CERTIFICATE_P12:
+        required: true
+      CERTIFICATE_PASSWORD:
+        required: true
+      PROVISIONING_PROFILE:
+        required: true
+      KEYCHAIN_PASSWORD:
+        required: true
+
+jobs:
+  build:
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: "26"
+
+      - name: install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.38.6"
+          channel: "stable"
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Install CocoaPods dependencies
+        run: |
+          cd ios
+          pod install
+
+      - name: Setup iOS Certificates and Provisioning Profiles
+        env:
+          CERTIFICATE_P12: ${{ secrets.CERTIFICATE_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.CERTIFICATE_PASSWORD }}
+          PROVISIONING_PROFILE: ${{ secrets.PROVISIONING_PROFILE }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          # キーチェーンの作成
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security set-keychain-settings -t 3600 -u build.keychain
+
+          # 証明書のインポート
+          echo "$CERTIFICATE_P12" | base64 --decode > certificate.p12
+          security import certificate.p12 -k build.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+
+          # プロビジョニングプロファイルの配置
+          PP_PATH=$HOME/Library/MobileDevice/Provisioning\ Profiles
+          mkdir -p "$PP_PATH"
+
+          echo "$PROVISIONING_PROFILE" | base64 --decode > profile.mobileprovision
+
+          # プロビジョニングプロファイルをデコードしてUUIDを抽出
+          PP_UUID=$(security cms -D -i profile.mobileprovision | plutil -extract UUID raw -)
+
+          if [ -z "$PP_UUID" ]; then
+            echo "Error: Could not extract UUID from provisioning profile"
+            security cms -D -i profile.mobileprovision | head -20
+            exit 1
+          fi
+
+          cp profile.mobileprovision "$PP_PATH/$PP_UUID.mobileprovision"
+          echo "Installed provisioning profile: $PP_UUID"
+
+          # プロビジョニングプロファイル名を抽出
+          PP_NAME=$(security cms -D -i profile.mobileprovision | plutil -extract Name raw -)
+          echo "Provisioning profile name: $PP_NAME"
+
+          # ExportOptions.plist を生成
+          cat > ios/ExportOptions.plist << EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+          	<key>method</key>
+          	<string>app-store</string>
+          	<key>teamID</key>
+          	<string>YOUR_TEAM_ID</string>
+          	<key>uploadBitcode</key>
+          	<false/>
+          	<key>compileBitcode</key>
+          	<false/>
+          	<key>uploadSymbols</key>
+          	<true/>
+          	<key>signingStyle</key>
+          	<string>manual</string>
+          	<key>signingCertificate</key>
+          	<string>Apple Distribution</string>
+          	<key>provisioningProfiles</key>
+          	<dict>
+          		<key>com.example.travel_dosuka</key>
+          		<string>$PP_NAME</string>
+          	</dict>
+          </dict>
+          </plist>
+          EOF
+
+          # Force Manual Signing
+          sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' ios/Runner.xcodeproj/project.pbxproj
+          sed -i '' "s/PROVISIONING_PROFILE_SPECIFIER = \"\";/PROVISIONING_PROFILE_SPECIFIER = \"$PP_UUID\";/g" ios/Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/"iPhone Developer"/"iPhone Distribution"/g' ios/Runner.xcodeproj/project.pbxproj
+          sed -i '' 's/"Apple Development"/"Apple Distribution"/g' ios/Runner.xcodeproj/project.pbxproj
+
+      - name: Build iOS app
+        run: |
+          flutter build ipa \
+            --no-tree-shake-icons \
+            --export-options-plist=ios/ExportOptions.plist \
+            --release
+
+      - name: Upload to TestFlight
+        if: ${{ inputs.upload-to-testflight }}
+        uses: apple-actions/upload-testflight-build@v3
+        with:
+          app-path: build/ios/ipa/travel_dosuka.ipa
+          issuer-id: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+          api-key-id: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+          api-private-key: ${{ secrets.APP_STORE_CONNECT_API_KEY_CONTENT }}

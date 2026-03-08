@@ -1,0 +1,53 @@
+on:
+  workflow_call:
+    inputs:
+      is-pull-request:
+        type: boolean
+        description: "Is pull request"
+        required: true
+        default: false
+      target:
+        type: string
+        description: "デプロイ対象 (dev / prod)"
+        required: true
+        default: "dev"
+    secrets:
+      FIREBASE_SERVICE_ACCOUNT_TRAVEL_DOSUKA:
+        required: true
+
+jobs:
+  build-web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.38.6"
+          channel: "stable"
+
+      - name: Install packages
+        run: flutter pub get
+
+      - name: Build web
+        run: flutter build web --no-tree-shake-icons
+
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: "${{ secrets.GITHUB_TOKEN }}"
+          firebaseServiceAccount: "${{ secrets.FIREBASE_SERVICE_ACCOUNT_TRAVEL_DOSUKA }}"
+          channelId: live
+          projectId: travel-dosuka
+          target: ${{ inputs.target }}
+
+      - name: Post deployment URL as PR comment
+        if: ${{ inputs.is-pull-request }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TEXT="🤖デプロイに成功したよ！\n\n💻Webの開発環境URL: https://travel-dosuka-dev.web.app/\n\n※別のPRで上書きされる場合があります🙏"
+          PR_NUMBER=$(jq --raw-output .pull_request.number "$GITHUB_EVENT_PATH")
+          API_URL="https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments"
+          DATA="{\"body\":\"$TEXT\"}"
+          curl -sSL -H "Authorization: Bearer $GITHUB_TOKEN" -H "Content-Type: application/json" -X POST -d "$DATA" "$API_URL"

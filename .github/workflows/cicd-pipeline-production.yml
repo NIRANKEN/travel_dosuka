@@ -1,0 +1,57 @@
+name: Prod CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
+  build-deploy-web:
+    needs: [test]
+    uses: ./.github/workflows/build-deploy-web.yml
+    with:
+      is-pull-request: ${{ github.event_name == 'pull_request' }}
+      target: prod
+    secrets:
+      FIREBASE_SERVICE_ACCOUNT_TRAVEL_DOSUKA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_TRAVEL_DOSUKA }}
+
+  build-deploy-android:
+    needs: [test]
+    uses: ./.github/workflows/build-deploy-android-on-firebase.yml
+    secrets:
+      KEYSTOREFILE: ${{ secrets.KEYSTOREFILE }}
+      KEYSTOREPASSWORD: ${{ secrets.KEYSTOREPASSWORD }}
+      KEYSTOREALIAS: ${{ secrets.KEYSTOREALIAS }}
+      KEYSTOREALIASPASSWORD: ${{ secrets.KEYSTOREALIASPASSWORD }}
+      FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
+      FIREBASE_SERVICE_CREDENTIALS_FILE_CONTENT: ${{ secrets.SERVICE_ACCOUNT_JSON }}
+
+  build-deploy-api:
+    needs: [test]
+    uses: ./.github/workflows/build-deploy-api.yml
+    with:
+      environment: prod
+    secrets:
+      GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+      CORS_ORIGIN: ${{ secrets.CORS_ORIGIN }}
+
+  # iOSのビルドはfreePlanだと制限があるので一旦コメントアウト
+  # build-deploy-ios:
+  #   needs: [test]
+  #   permissions:
+  #     contents: read
+  #   uses: ./.github/workflows/build-deploy-ios.yml
+  #   with:
+  #     upload-to-testflight: false
+  #   secrets:
+  #     APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+  #     APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+  #     APP_STORE_CONNECT_API_KEY_CONTENT: ${{ secrets.APP_STORE_CONNECT_API_KEY_CONTENT }}
+  #     CERTIFICATE_P12: ${{ secrets.IOS_CERTIFICATE_P12 }}
+  #     CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+  #     PROVISIONING_PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE }}
+  #     KEYCHAIN_PASSWORD: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}

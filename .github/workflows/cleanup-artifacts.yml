@@ -1,0 +1,15 @@
+name: 'cleanup artifacts'
+
+on:
+  schedule:
+    - cron: '0 23 * * *' # UTC
+  workflow_dispatch:
+
+jobs:
+  delete-artifacts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: kolpav/purge-artifacts-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          expire-in: 1days

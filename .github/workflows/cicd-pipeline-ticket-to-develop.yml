@@ -1,0 +1,63 @@
+name: Ticket to Dev CI/CD Pipeline
+
+on:
+  pull_request:
+    branches: [develop-**]
+
+# 複数実行しないように古いジョブをキャンセルする
+# https://docs.github.com/en/actions/using-jobs/using-concurrency#example-only-cancel-in-progress-jobs-or-runs-for-the-current-workflow
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
+  build-deploy-web:
+    needs: [test]
+    uses: ./.github/workflows/build-deploy-web.yml
+    with:
+      is-pull-request: ${{ github.event_name == 'pull_request' }}
+      target: dev
+    secrets:
+      FIREBASE_SERVICE_ACCOUNT_TRAVEL_DOSUKA: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_TRAVEL_DOSUKA }}
+
+  build-deploy-android:
+    needs: [test]
+    uses: ./.github/workflows/build-deploy-android-on-firebase.yml
+    secrets:
+      KEYSTOREFILE: ${{ secrets.KEYSTOREFILE }}
+      KEYSTOREPASSWORD: ${{ secrets.KEYSTOREPASSWORD }}
+      KEYSTOREALIAS: ${{ secrets.KEYSTOREALIAS }}
+      KEYSTOREALIASPASSWORD: ${{ secrets.KEYSTOREALIASPASSWORD }}
+      FIREBASE_APP_ID: ${{ secrets.FIREBASE_APP_ID }}
+      FIREBASE_SERVICE_CREDENTIALS_FILE_CONTENT: ${{ secrets.SERVICE_ACCOUNT_JSON }}
+
+  build-deploy-api:
+    needs: [test]
+    uses: ./.github/workflows/build-deploy-api.yml
+    with:
+      environment: dev
+    secrets:
+      GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+      CORS_ORIGIN: ${{ secrets.CORS_ORIGIN_DEVELOP }}
+
+  # iOSのビルドはfreePlanだと制限があるのでdevelopマージ時は一旦コメントアウト
+  # build-deploy-ios:
+  #   needs: [test]
+  #   permissions:
+  #     contents: read
+  #   uses: ./.github/workflows/build-deploy-ios.yml
+  #   with:
+  #     upload-to-testflight: false
+  #   secrets:
+  #     APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+  #     APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+  #     APP_STORE_CONNECT_API_KEY_CONTENT: ${{ secrets.APP_STORE_CONNECT_API_KEY_CONTENT }}
+  #     CERTIFICATE_P12: ${{ secrets.IOS_CERTIFICATE_P12 }}
+  #     CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+  #     PROVISIONING_PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE }}
+  #     KEYCHAIN_PASSWORD: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}

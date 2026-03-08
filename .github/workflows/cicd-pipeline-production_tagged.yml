@@ -1,0 +1,21 @@
+name: Prod CI/CD Pipeline (Android - Play Store)
+
+on:
+  push:
+    # `android-v` から始まる名前のタグをプッシュすると走る
+    tags:
+      - 'android-v*'
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
+  build-deploy-android:
+    needs: [test]
+    uses: ./.github/workflows/build-deploy-android-on-playstore.yml
+    secrets:
+      KEYSTOREFILE: ${{ secrets.KEYSTOREFILE }}
+      KEYSTOREPASSWORD: ${{ secrets.KEYSTOREPASSWORD }}
+      KEYSTOREALIAS: ${{ secrets.KEYSTOREALIAS }}
+      KEYSTOREALIASPASSWORD: ${{ secrets.KEYSTOREALIASPASSWORD }}
+      SERVICE_ACCOUNT_JSON: ${{ secrets.SERVICE_ACCOUNT_JSON }}

@@ -1,0 +1,85 @@
+name: API CI for Build and Deploy to Cloud Run
+
+# travel-suggestion-api を Docker イメージとしてビルドし、Google Cloud Run にデプロイする workflow
+# 前提条件:
+#   - Google Artifact Registry にリポジトリ (travel-dosuka) が作成済みであること
+#   - Google Cloud Run サービス (travel-suggestion-api) が作成済みであること
+#   - Secret Manager に GOOGLE_API_KEY が登録済みであること
+on:
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        description: "デプロイ対象の環境 (dev / prod)"
+        required: true
+        default: "dev"
+    secrets:
+      GCP_SERVICE_ACCOUNT_KEY:
+        description: "GCP サービスアカウントの JSON キー (base64 エンコード不要)"
+        required: true
+      GCP_PROJECT_ID:
+        description: "GCP プロジェクト ID"
+        required: true
+      FIREBASE_PROJECT_ID:
+        description: "Firebase プロジェクト ID"
+        required: true
+      CORS_ORIGIN:
+        description: "CORS で許可するオリジン URL (例: https://travel-dosuka.web.app)"
+        required: true
+
+jobs:
+  build-deploy-api:
+    runs-on: ubuntu-latest
+    env:
+      REGION: asia-northeast1
+      SERVICE_NAME: travel-suggestion-api
+      REPOSITORY: travel-dosuka
+
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker ${{ env.REGION }}-docker.pkg.dev --quiet
+
+      - name: Build Docker image
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+        run: |
+          IMAGE_BASE="${{ env.REGION }}-docker.pkg.dev/${GCP_PROJECT_ID}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}"
+          docker build \
+            -t "${IMAGE_BASE}:${{ github.sha }}" \
+            -t "${IMAGE_BASE}:latest" \
+            ./travel-suggestion-api
+
+      - name: Push Docker image
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+        run: |
+          IMAGE_BASE="${{ env.REGION }}-docker.pkg.dev/${GCP_PROJECT_ID}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}"
+          docker push "${IMAGE_BASE}:${{ github.sha }}"
+          docker push "${IMAGE_BASE}:latest"
+
+      - name: Deploy to Cloud Run
+        uses: google-github-actions/deploy-cloudrun@v2
+        with:
+          service: ${{ env.SERVICE_NAME }}
+          region: ${{ env.REGION }}
+          image: "${{ env.REGION }}-docker.pkg.dev/${{ secrets.GCP_PROJECT_ID }}/${{ env.REPOSITORY }}/${{ env.SERVICE_NAME }}:${{ github.sha }}"
+          env_vars: |
+            NODE_ENV=production
+            PORT=8080
+            FIREBASE_PROJECT_ID=${{ secrets.FIREBASE_PROJECT_ID }}
+            CORS_ORIGIN=${{ secrets.CORS_ORIGIN }}
+          # GOOGLE_API_KEY は Secret Manager から注入する
+          # 事前に Secret Manager へ登録が必要: gcloud secrets create GOOGLE_API_KEY
+          secrets: |
+            GOOGLE_API_KEY=GOOGLE_API_KEY:latest
