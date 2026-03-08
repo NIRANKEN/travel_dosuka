@@ -1,0 +1,18 @@
+name: API Prod CI/CD Pipeline (Cloud Run)
+
+on:
+  push:
+    # `api-v` から始まる名前のタグをプッシュすると走る
+    tags:
+      - "api-v*"
+
+jobs:
+  build-deploy-api:
+    uses: ./.github/workflows/build-deploy-api.yml
+    with:
+      environment: prod
+    secrets:
+      GCP_SERVICE_ACCOUNT_KEY: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+      CORS_ORIGIN: ${{ secrets.CORS_ORIGIN }}

@@ -1,0 +1,27 @@
+name: iOS Prod CI/CD Pipeline
+
+on:
+  push:
+    # `ios-v` から始まる名前のタグをプッシュすると走る
+    tags:
+      - "ios-v*"
+
+jobs:
+  test:
+    uses: ./.github/workflows/test.yml
+
+  build-deploy-ios:
+    needs: [test]
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-deploy-ios.yml
+    with:
+      upload-to-testflight: true
+    secrets:
+      APP_STORE_CONNECT_API_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
+      APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
+      APP_STORE_CONNECT_API_KEY_CONTENT: ${{ secrets.APP_STORE_CONNECT_API_KEY_CONTENT }}
+      CERTIFICATE_P12: ${{ secrets.IOS_CERTIFICATE_P12 }}
+      CERTIFICATE_PASSWORD: ${{ secrets.IOS_CERTIFICATE_PASSWORD }}
+      PROVISIONING_PROFILE: ${{ secrets.IOS_PROVISIONING_PROFILE }}
+      KEYCHAIN_PASSWORD: ${{ secrets.IOS_KEYCHAIN_PASSWORD }}

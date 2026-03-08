@@ -1,0 +1,70 @@
+name: Android CI for Build and Deploy on Play Store
+
+# Google Play Store にアップロードするための workflow
+on:
+  workflow_call:
+    secrets:
+      KEYSTOREFILE:
+        required: true
+      KEYSTOREPASSWORD:
+        required: true
+      KEYSTOREALIAS:
+        required: true
+      KEYSTOREALIASPASSWORD:
+        required: true
+      SERVICE_ACCOUNT_JSON:
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v4
+
+      - name: setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: "corretto"
+          java-version: "17"
+
+      - name: install Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.38.6"
+          channel: "stable"
+
+      - name: setup Build Keys
+        env:
+          KEYSTOREFILE: ${{ secrets.KEYSTOREFILE }}
+          KEYSTOREPASSWORD: ${{ secrets.KEYSTOREPASSWORD }}
+          KEYSTOREALIAS: ${{ secrets.KEYSTOREALIAS }}
+          KEYSTOREALIASPASSWORD: ${{ secrets.KEYSTOREALIASPASSWORD }}
+        run: |
+          touch ./android/keystore.properties
+          echo "${KEYSTOREFILE}" | base64 -d > travel-dosuka.keystore
+          echo -e "travelDosukaKeyFile=$PWD/travel-dosuka.keystore\n" >> ./android/keystore.properties
+          echo -e "travelDosukaKeyStorePassword=${KEYSTOREPASSWORD}\n" >> ./android/keystore.properties
+          echo -e "travelDosukaKeyAlias=${KEYSTOREALIAS}\n" >> ./android/keystore.properties
+          echo -e "travelDosukaKeyAliasPassword=${KEYSTOREALIASPASSWORD}\n" >> ./android/keystore.properties
+
+      - name: build Release app bundle
+        run: flutter build appbundle --no-tree-shake-icons
+
+      - name: Fix App File Name
+        run: |
+          FILE_NAME=$(find build/app/outputs/bundle/release -name '*.aab' -print -quit)
+          echo "AAB_FILE_FULL_PATH=$FILE_NAME" >> $GITHUB_ENV
+
+      - name: Create service_account.json
+        env:
+          SERVICE_ACCOUNT_JSON: ${{ secrets.SERVICE_ACCOUNT_JSON }}
+        run: echo "$SERVICE_ACCOUNT_JSON" >> service_account.json
+
+      - name: Deploy to Play Store
+        uses: r0adkll/upload-google-play@v1.0.15
+        with:
+          serviceAccountJson: service_account.json
+          packageName: com.example.travel_dosuka
+          releaseFile: ${{ env.AAB_FILE_FULL_PATH }}
+          track: production
